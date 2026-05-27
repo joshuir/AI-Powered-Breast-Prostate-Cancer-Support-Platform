@@ -1,0 +1,6 @@
+{
+  "name": "GreenCare Hospital",
+  "description": "GreenCare Clinical Oncology Console: A modern full-stack hospital portal specialized in Breast & Prostate Cancer appointments, diagnostic reporting, and an interactive Gemini AI Cancer Thesaurus.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

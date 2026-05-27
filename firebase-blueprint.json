@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a registered patient or admin user profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique Firebase Auth uid." },
+        "email": { "type": "string", "description": "User email address." },
+        "displayName": { "type": "string", "description": "User display name." },
+        "role": { "type": "string", "enum": ["patient", "admin"], "description": "User system role." },
+        "phoneNumber": { "type": "string", "description": "User contact telephone number." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the profile was generated." }
+      },
+      "required": ["uid", "email", "role", "displayName"]
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Represents a clinical doctor available for appointments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Document ID." },
+        "name": { "type": "string", "description": "Full name of the doctor." },
+        "specialty": { "type": "string", "description": "Medical specialty." },
+        "department": { "type": "string", "description": "Assigned hospital department." },
+        "imageUrl": { "type": "string", "description": "URL to photo of the doctor." },
+        "experience": { "type": "string", "description": "Years of professional experience description." },
+        "availability": { "type": "string", "description": "General description of working hours." },
+        "rating": { "type": "number", "description": "Average review rating (out of 5)." },
+        "email": { "type": "string", "description": "Contact email of doctor." }
+      },
+      "required": ["id", "name", "specialty", "department", "experience", "availability"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Represents an appointment booking between a patient and a doctor.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string", "description": "User ID of the patient booking the appointment." },
+        "patientName": { "type": "string", "description": "Name of the patient." },
+        "patientEmail": { "type": "string", "description": "Email of the patient." },
+        "doctorId": { "type": "string", "description": "Doctor ID assigned." },
+        "doctorName": { "type": "string", "description": "Doctor full name." },
+        "doctorSpecialty": { "type": "string", "description": "Doctor medical specialty." },
+        "date": { "type": "string", "description": "Appointment date YYYY-MM-DD format." },
+        "timeSlot": { "type": "string", "description": "Selected hourly time slot." },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "completed"] },
+        "reason": { "type": "string", "description": "Brief description of symptoms/reason." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "patientName", "patientEmail", "doctorId", "doctorName", "doctorSpecialty", "date", "timeSlot", "status"]
+    },
+    "Report": {
+      "title": "MedicalReport",
+      "description": "Represents a medical report or document uploaded by the patient.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "patientId": { "type": "string", "description": "The patient who owns and uploaded this document." },
+        "patientName": { "type": "string", "description": "The name of the patient." },
+        "title": { "type": "string", "description": "Title of the medical report." },
+        "description": { "type": "string", "description": "Additional notes/description about the report." },
+        "fileName": { "type": "string", "description": "Uploaded file name." },
+        "fileType": { "type": "string", "description": "MIME type or file extension." },
+        "fileSize": { "type": "string", "description": "Formatted file size." },
+        "fileDataURL": { "type": "string", "description": "Data URL encoded string containing file contents." },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "patientId", "patientName", "title", "fileName", "fileDataURL"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Document mapping standard patient user profile details."
+    },
+    "/doctors/{doctorId}": {
+      "schema": "Doctor",
+      "description": "Document mapping registered doctor profiles."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Document containing individual user appointments."
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Medical reports uploaded by patients."
+    }
+  }
+}

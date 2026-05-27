@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety catch-all: deny all actions by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- HELPER FUNCTIONS ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (
+        request.auth.token.email_verified == true ||
+        request.auth.token.firebase.sign_in_provider == 'google.com'
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'josh.a.mens2016@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- SCHEMA VALIDATION HELPERS ---
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 200 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role is string && (data.role == 'patient' || data.role == 'admin') &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32)) &&
+             data.keys().hasAll(['uid', 'email', 'role', 'displayName']) && data.keys().size() <= 6;
+    }
+
+    function isValidDoctor(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.specialty is string && data.specialty.size() <= 200 &&
+             data.department is string && data.department.size() <= 200 &&
+             data.experience is string && data.experience.size() <= 200 &&
+             data.availability is string && data.availability.size() <= 500 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 2048)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+             (!('rating' in data) || (data.rating is number)) &&
+             data.keys().hasAll(['id', 'name', 'specialty', 'department', 'experience', 'availability']);
+    }
+
+    function isValidAppointment(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.patientName is string && data.patientName.size() <= 200 &&
+             data.patientEmail is string && data.patientEmail.size() <= 256 &&
+             data.doctorId is string && data.doctorId.size() <= 128 &&
+             data.doctorName is string && data.doctorName.size() <= 200 &&
+             data.doctorSpecialty is string && data.doctorSpecialty.size() <= 200 &&
+             data.date is string && data.date.size() <= 32 &&
+             data.timeSlot is string && data.timeSlot.size() <= 32 &&
+             data.status is string && (data.status == 'pending' || data.status == 'confirmed' || data.status == 'cancelled' || data.status == 'completed') &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 1000));
+    }
+
+    function isValidReport(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.patientName is string && data.patientName.size() <= 200 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.fileName is string && data.fileName.size() <= 256 &&
+             data.fileDataURL is string && data.fileDataURL.size() <= 2000000 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('fileType' in data) || (data.fileType is string && data.fileType.size() <= 128)) &&
+             (!('fileSize' in data) || (data.fileSize is string && data.fileSize.size() <= 64));
+    }
+
+    // --- COLLECTION MATCH RULES ---
+
+    // 1. Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && isAdmin();
+      allow create: if isVerified() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role == 'patient' && incoming().createdAt == request.time;
+      allow update: if isVerified() && (request.auth.uid == userId || isAdmin()) && isValidUser(incoming()) && (
+        (incoming().role == existing().role && incoming().uid == existing().uid && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'updatedAt'])) || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 2. Doctors collection
+    match /doctors/{doctorId} {
+      allow read: if true; // anyone can see doctor catalogues
+      allow write: if isVerified() && isAdmin() && isValidDoctor(incoming());
+    }
+
+    // 3. Appointments collection
+    match /appointments/{appointmentId} {
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && (incoming().patientId == request.auth.uid || isAdmin()) && isValidId(appointmentId) && isValidAppointment(incoming()) && incoming().createdAt == request.time;
+      allow update: if isVerified() && (
+        (existing().patientId == request.auth.uid && isValidAppointment(incoming()) && (
+          // Allow customer to change status to cancelled, or change dates
+          (incoming().status == 'cancelled' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          (incoming().status == existing().status && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'timeSlot', 'reason', 'updatedAt']))
+        )) || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 4. Reports collection
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && (incoming().patientId == request.auth.uid || isAdmin()) && isValidId(reportId) && isValidReport(incoming()) && incoming().uploadedAt == request.time;
+      allow update: if isVerified() && isAdmin() && isValidReport(incoming());
+      allow delete: if isSignedIn() && (resource.data.patientId == request.auth.uid || isAdmin());
+    }
+  }
+}
